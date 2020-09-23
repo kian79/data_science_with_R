@@ -1,0 +1,271 @@
+---
+title: "mobile data"
+author: "Kian Kashfipour"
+date: "9/23/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+mobile_data <- readRDS("~/Desktop/hesaba/HW3/mobile_data.rds")
+```
+
+
+## جدا کردن موبایل‌ها
+جدا کردن موبایل ها از بقیه ی محصولات (شامل لپتاپ ساعت هوشمند دوربین عکاسی و ...) برای جدا کردن ابتدا آن هایی که سیمکارت ندارند رو حذف میکنیم
+سپس از آنجایی که قوی ترین تلفن همراه هم ظرفیت باطری آن کمتر از ۵۳۹۹ میلی آمپر ساعت است آن هایی که ظرفیت باطری‌ای بیش از این دارند را حذف میکنیم
+سپس آن‌هایی که بیش از ۳۰۰ گرم یا کمتر از ۵۰ گرم هستند را حذف میکنیم و پس از آن آن‌هایی که بیش از ۷ اینچ هستند را حذف میکنیم. با این وجود
+باز هم برخی از محصولات موبایل نیستند و ساعت در میان آن‌هاست به همین خاطر به شکل دستی آن‌هایی که در اسمشان واچ یا گیر هست را جدا میکنیم.
+
+```{r Seperate mobiles, message=FALSE, warning=FALSE}
+mobile_data <- # to separate watches add display sizze limits // gear saate!!!
+  mobile_data%>%
+  filter(
+    sim_no!=0
+  )%>%
+  filter(battery_mah <= 5300)%>%
+  filter(weight<300 & weight>50)%>%
+  filter(display_size <7)
+```
+
+## سوال اول 
+برای پیدا کردن شرکتی که بیشترین تعداد گوشی راتولید کرده بر اساس نوع شرکت گروه‌بندی میکنیم و سپس تعداد را میشماریم و پس از آن نمودار ستونی 
+آن را رسم میکنیم. به این شکل که همان نمودار ستونی را رسم میکنیم ولی فقط نمودار آن‌هایی را که در لیست ۲۰ شرکت برتر بودند.
+
+```{r Q1, message=FALSE, warning=FALSE}
+companies <-
+  mobile_data%>%
+  group_by(company)%>%
+  summarise(
+    number_of_products = n()
+  )%>%
+  arrange(desc(number_of_products))%>%
+  head(20)
+companies_for_plot <-
+  mobile_data%>%
+  filter(
+    company %in% companies$company
+  )
+ggplot(companies, aes(x=company, y=number_of_products,fill = company, angle=180))+
+  geom_bar(stat="identity")+theme_minimal()+coord_flip()
+
+```
+
+## سوال دوم
+
+برای درک بهتر هر ۴نمودار را در یک شکل کشیده‌ام.
+ابتدا آن‌هایی که مقدار ندارند را حذف میکنیم. سپس بر اساس سال تولید گروه‌بندی کرده و نمودار خطی آن‌ها را میکشیم.
+
+```{r Q2, message=TRUE, warning=FALSE}
+info_year <-
+  mobile_data%>%
+  group_by(year)%>%
+  drop_na(dim_breadth)%>%
+  drop_na(dim_thickness)%>%
+  drop_na(dim_length)%>%
+  drop_na(cam_px)%>%
+    summarise(
+    mean_breadth = mean(dim_breadth),
+    mean_thickness = mean(dim_thickness),
+    mean_length = mean(dim_length),
+    mean_cam_px = mean(cam_px)
+      )
+ggplot(info_year,aes(x=year))+
+  geom_line(aes(y=mean_thickness,color = 'thckness'))+
+  geom_line(aes(y=mean_length,color='length')) +
+  geom_line(aes(y=mean_breadth,color = 'breadth'))+
+  geom_line(aes(y=mean_cam_px,color='cam px'))
+
+```
+
+## سوال سوم
+ابتدا بر اساس تعداد سیم‌کارت و قابلیت ال‌تی‌ای گروه‌بندی میکنیم سپس میانگین قیمت را بدست می‌آوریم و پس ار آن نمودار ستونی را به شکلی که هم تعداد سیمکارت و هم قابلیت ال‌تی‌ای واضح باشد رسم میکنیم.
+```{r q3, message=FALSE, warning=FALSE}
+price_sim <-
+  mobile_data%>%
+  group_by(sim_no,LTE)%>%
+  drop_na(price)%>%
+  summarise(
+    price = mean(price),
+  )%>%
+  unique()
+ggplot(price_sim,aes(x=sim_no,y=price))+
+geom_bar(stat = 'identity',aes(fill=LTE),position = position_dodge(
+    preserve = "single"))
+```
+# سوال چهارم
+ابتدا بر اساس سال فیلتر میکنیم سپس آن‌هایی که مقادیر کلفتی و سوکت صدا ندارند را حذف میکنیم پس از آن نمودار حعبه‌ای مربوط به کلتفی و داشتن و نداشتن سوکت را رسم میکنیم.
+```{r q4, message=FALSE, warning=FALSE}
+thickness_headphone <-
+  mobile_data%>%
+  filter(year == 2017)%>%
+  drop_na(dim_thickness,audio_jack)
+
+ggplot(thickness_headphone,aes(audio_jack, dim_thickness, color=audio_jack))+
+  geom_boxplot() + theme_minimal()
+```
+
+# سوال پنجم
+برای بدست آوردن پی‌پی‌آی از فرمول مربوطه استفاده میکنیم سپس به سادگی نمودار آن را رسم میکنیم.فرمول بدست آوردن پی‌پی‌آی هم در کد آورده شده‌است
+
+```{r q5, message=FALSE, warning=FALSE}
+ppi_mobile <-
+  mobile_data%>%
+  drop_na(px_row,px_col,display_size)%>%
+  mutate(
+    PPI = (sqrt((px_row)**2+(px_col)**2) / display_size)
+  )
+ggplot(ppi_mobile,aes(PPI))+geom_histogram(fill='blue')+theme_minimal()
+```
+
+# سوال ششم
+
+در این سوال ابتدا به معیاری برای گوش‌کوبیت نیاز داریم. برای اینکار من مشخصات گوشی ۱۱۰۰ نوکیا که در ایران نماد گوش‌کوب بوده‌است را در اینترنت بررسی کردم و سپس بر اساس طول و عرض و کلفتی آن معیارهایی برای خودم تعیین کردم که در زیر مشخص شده‌اند هرکدام از معیارهای وزن و طول و عرض و ضخامت
+برای میزان گوش‌بیت حجم را بر جرم تقسیم کرده‌ام 
+```{r q6, message=FALSE, warning=FALSE}
+gooshkoobs <-
+  mobile_data%>%
+  filter(dim_thickness > 20 & dim_length < 130 & dim_breadth < 50 & weight < 120)%>%
+  mutate(
+    gooshkoobiat = dim_thickness * dim_length * dim_breadth / weight
+  )%>%
+  arrange(desc(gooshkoobiat))%>%
+  head(20)
+ggplot(gooshkoobs,aes(x = paste(company,device, sep = " "), y = gooshkoobiat))+
+  geom_bar(stat = 'identity')+
+  coord_flip()+
+  xlab('Company and Device')
+```
+
+## سوال هفتم
+
+برای این سوال در ابتدا باید بدانیم هر جسمی که چگالی آن کمتر از آب باشد در آب غرق نمی‌شود. پس باید ابتدا چگالی هر گوشی را بدست آوریم سپس با چگالی آب مقایسه کنیم و آن‌هایی که چگالی‌شان کمتر است را جدا کنیم.
+برای بدست آوردن چگالی هم جرم را تقسیم بر ابعاد میکنیم سپس برای تبدیل آن به واحد چگالی آب آن را ضربدر یک میلیون میکنیم و یک ستون هم اضافه میکنیم
+که بولین است و مقادیر ترو و فالس میگیرد که در صورتی که چگالی کمتر از ۱۰۰۰ باشد ترو برمیگرداند به این معنا که در آب غرق نمیشود.
+سپس برای زیباتر شدن نمودار آن‌هایی که چگالی بیش از ۲۵۰۰ دارند حذف میکنیم زیرا تعدادشان بسیار کم است و باعث میشوند نمودار به درستی دیده‌نشود.
+سپس نمودار چگالی گوشی‌ها را رسم میکنیم و آن‌هایی که در آب غرق نمی‌شوند را به رنگ دیگر در می‌آوریم.
+همچنین چون مقادیر چگالی بسیار متفاوت هستند آن‌ها را روبه پایین گرد میکنیم تا ارقام اعشاری آن‌ها از بین برود و رسم نمودار ساده‌تر شود زیرا در غیر اینصورت رسم نمودار غیرممکن است به دلیل مقادیر مختلفی که وجود دارد.
+```{r q7, message=FALSE, warning=FALSE}
+density_water <-
+  mobile_data%>%
+  drop_na(dim_length,dim_breadth,dim_thickness,weight)%>%
+  filter((weight*dim_length*dim_breadth*dim_thickness) > 0)%>%
+  mutate(
+    density = as.integer(1000000*(weight / (dim_length*dim_breadth*dim_thickness))),
+    stay_afloat = density <= 1000
+  )%>%
+  filter(density < 2500)
+ggplot(density_water, aes(density))+
+  geom_histogram(position = 'identity',aes(fill= stay_afloat))+
+  geom_vline(xintercept = 1000)
+```
+
+## سوال هشتم
+
+ابتدا سطرهایی که مقادیر حجم باطری و وزن ندارند را حذف میکنیم سپس به سادگی یک نمودار پراکنش از وابستگی این دو کمیت به هم میکشیم و یک مدل خطی هم به آن
+اضافه میکنیم برای درک بهتر این وابستگی.
+سپس همبستگی آن دو را چاپ میکنیم که حدودا ۰.۷۵ است و نشان از همبستگی زیاد این دو متغیر گوشی‌ها به هم دارد.
+
+```{r q8, message=FALSE, warning=FALSE}
+battery_weight <-
+  mobile_data%>%
+  drop_na(weight,battery_mah)
+
+ggplot(battery_weight,aes(x=battery_mah,y=weight, color=year))+
+  geom_point()+
+  geom_smooth(method='lm', se=FALSE)
+print(paste('Correlation:',cor(battery_weight$battery_mah,battery_weight$weight),sep = ' '))
+```
+
+## سوال نهم
+
+قصد داریم پرچم‌داران سامسونگ را رسم کنیم. ابتدا آن‌هایی که ساخته‌ی شرکت سامسونگ هستند را جدا میکنیم سپس برای رسم پرچم‌داران
+گوشی‌های سری جی ای اس و نوت را جدا کرده و در یک جدول جدا میکنیم.
+سپس نمودار قیمت زمان این ۴ سری را رسم میکنیم.
+همانطور که واضح است سری جی قیمت کمتری دارد و جزو مدل‌های ارزان سامسونگ و بازار خاورمیانه‌ی آن است که مردم توان خرید گوشی‌های گران‌قیمت ندارند.
+مدل نوت بیشترین قیمت را دارد و جزو قدیمی‌ترین محصولات سامسونگ است پس از آن مدل‌های سری اس هستند که هم نسبتا قدیمی هستند و هم قیمت زیادی دارند و بعد از آن هم سری ای هست که قیمت متوسطی دارد و در چند سال اخیر هم عرضه شده‌است.
+همانطور که واضح است شرکت سامسونگ به مرور زمان سعی کرده محصولاتی هم که قیمت کمی دارند عرضه کند تا بازار خود را حفظ کند و بتواند گسترش دهد.
+
+```{r q9, message=FALSE, warning=FALSE}
+samsungـmodels<-
+  mobile_data%>%filter(company=='Samsung')
+samsungـflagships<-samsungـmodels%>%
+  mutate(model=case_when(
+  str_detect(device,"Galaxy A\\d")~"Galaxy A",
+  str_detect(device,"Galaxy J\\d")~"Galaxy J",
+  str_detect(device,"Galaxy S\\d")~"Galaxy S",
+  str_detect(device,"Note")~"Galaxy Note")
+)%>%group_by(year,model)%>%summarise(average_price=mean(price,rm.na=T))
+ggplot(samsungـflagships,aes(x=year,y=average_price,color=model))+
+  geom_line()+
+  geom_point()+xlim(2010,2017)
+```
+## نمودارهای جالب 
+
+# نمودار اول
+
+جالبی این نمودار بنظر من در این مورد است که در ابتدا تولید موبایل دشوار بوده‌است و بسیار هم کمیاب بوده و قیمت آن زیاد بوده است
+پس از مدتی رقابت شرکت‌های مختلف در این بود که بتوانند گوشی‌های ارزان‌تر تولید کنند تا مردم از آن‌ها بخرند پس به مرور زمان قیمت‌ها کمتر شدند
+ولی پس از مدتی رقابت در افزایش امکانات ایجاد شد و به تبع آن قیمت‌ها هم افزایش یافتند. بنظر من در آینده این نمودار کاهش پیدا میکند زیرا مجددا رقابت در تولید گوشی‌های ارزان با کیفیت میرود.
+
+```{r q10_1, message=FALSE, warning=FALSE}
+size_year <-
+  mobile_data%>%
+    drop_na(year,price)%>%
+    group_by(year)%>%
+    summarise(
+      mean_price = mean(price),
+      mean_size = mean(display_size)
+    )%>%
+    filter(year<2017 & year > 2004)
+
+ggplot(size_year,aes(x=year,y=mean_price))+
+  geom_line()+
+  geom_point()
+```
+# نمودار دوم
+
+در این نمودار سایز موبایل‌ها را در سال‌های مختلف مقایسه میکنم.
+همانطور که در این نمودار هم واضح است در ابتدا گوشی‌های بسیار بزرگ‌ بوده‌اند(در اینجا فقط اندازه صفحه نمایش واضح است نه اندازه‌ی واقعی) پس از مدتی اندازه‌ی آن‌ها به مرور کمتر می‌شود و رقابت شرکت‌ها در تولید گوشی‌های کوچک‌تر می‌شود ولی بعد از آمدن گوشی‌های هوشمند مجددا رقابت در تولید گوشی‌های بزرگ‌تر ایجاد می‌شود که همانطور که در شکل هم واضح است در چند سال اخیر تولید میانگین اندازه صفحه نمایش گوشی‌ها به طرز سرسام‌آوری زیاد شده‌است که این روند تا امروز هم که سال ۲۰۲۰ است ادامه دارد.
+
+```{r q10_2, message=FALSE, warning=FALSE}
+size_year <-
+  mobile_data%>%
+    drop_na(display_size,year)%>%
+    group_by(year)%>%
+    summarise(
+      mean_price = mean(price),
+      mean_size = mean(display_size)
+    )
+
+ggplot(size_year,aes(x=year,y=mean_size))+
+  geom_line()+
+  geom_point()
+```
+
+# نمودار سوم
+
+در این نمودار میانگین مساحت موبایل‌ها را در سال‌های مختلف بدست آورده‌ام که همانطور که به وضوح پیداست در ابتدا گوشی‌ها به شدت طول و عرض زیادی داشتند و بزرگ بودند پس از مدتی رقابت بسیار زیادی در کوچک‌ کردن گوشی‌ها شکل گرفت که باعث شد میانگین مساحت کوشی‌ها در سال‌های مختلف بسیار کم بشوداما حدودا از سال ۲۰۱۰ به بعد و معرفی گوشی‌های هوشمند رقابت اصلی در بزرگ شدن گوشی‌ها شد که همین امر موجب رشد بسیار سریع مساحت گوشی‌ها شد که همچنان هم ادامه دارد.
+
+```{r q10_3, message=FALSE, warning=FALSE}
+size_year <-
+  mobile_data%>%
+    drop_na(dim_breadth, dim_length)%>%
+    group_by(year)%>%
+    summarise(
+      mean_price = mean(price),
+      mean_size = mean(display_size),
+      area = mean(dim_breadth) * mean(dim_length)
+    )
+
+ggplot(size_year,aes(x=year,y=area))+
+  geom_line()+
+  geom_point()
+```
+
+
+به طور کلی جالبی این سه نمودار برای من در این است که طرز تفکر مردم و شرکت‌ها در طول سالیان مختلف به شدت تغییر کرده‌است و عملا برعکس شده‌است.

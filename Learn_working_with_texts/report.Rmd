@@ -1,0 +1,392 @@
+---
+title: "مشاهیر و زلزله"
+author: "Kian Kashfipour"
+date: "9/30/2020"
+output: html_document
+---
+در ابتدا کتابخانه‌های مورد نیاز را فراخوانی میکنیم.
+```{r libs, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(gutenbergr)
+library(tidytext)
+library(wordcloud2)
+```
+
+سپس با جستجو در متادیتای گوتنبرگ آیدی کتاب رمان‌های دیکنز را پیدا میکنیم و آن‌ها را دانلود میکنیم و ذخیره میکنیم.
+```{r setup, message=FALSE, warning=FALSE}
+dickens_novels <-
+  gutenbergr::gutenberg_download(c(98,1023,917,766,821,786,963,1400,730,883,564,700,968,580,967))
+```
+# سوال اول
+در این سوال ابتدا کلمات را جدا کرده و سپس آن‌هایی که خالی هستند را حذف میکنیم پس از آن کلمات نامفهوم را به کمک کلمات توقف جدا میکنیم. درواقع این کلمات که در شی کلمات توقف ذخیره شده‌اند را از کلمات خود کم می‌کنیم تا کلماتی با معنی بسازیم.
+سپس بر اساس کلمه گروه‌بندی میکنیم و تعداد هرکدام را مینویسیم و به ترتیب ۲۰تای اول را جدا میکنیم.
+حال با کمک جی‌جی‌پلات نمودار ستونی آن کلمات پرکاربرد را رسم میکنیم.
+
+```{r q1, message=FALSE, warning=FALSE}
+words <-
+  dickens_novels%>%
+  unnest_tokens(word, text, token='words')
+
+words%>%
+  anti_join(stop_words, by = 'word') -> meaning_words
+head(words)
+top20 <-
+  meaning_words%>%
+  filter(! is.na(word))%>%
+  group_by(word)%>%
+  dplyr::count()%>%
+  arrange(desc(n))%>%
+  ungroup()%>%
+  mutate(top= seq_along(word))%>%
+  head(20)
+ggplot(top20,aes(x = top,y = n)) +
+  geom_bar(stat = 'identity', col = "transparent") +
+  geom_text(aes(y = n+50, label = word), hjust = "left") +
+  coord_flip() +
+  theme_minimal()+
+  theme(legend.position = 'none',
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank())+
+  labs(x='words')
+```
+
+# سوال دوم
+
+در این سوال ابرکلمه را رسم میکنیم ولی برای نمایش آن در خود محیط آر استودیو به مشکل برمیخوریم که نتیجتا باید در محیط مرورگر باز کرد عکس را به همین خاطر فایل عکس هم به شکل جدا در فایل‌ها ارسال کرده‌ام
+
+```{r q2, message=FALSE, warning=FALSE}
+novels_cloud <-
+  words%>%
+  group_by(word) %>%
+  dplyr::count() %>%
+  arrange(desc(n)) %>%
+  ungroup() %>%
+  slice(1:200) %>%
+  select(word,freq = n) %>%
+  wordcloud2(size = 1,
+             color = "random-dark",
+             minRotation = pi/2, maxRotation = -pi/2, minSize = 10,
+             rotateRatio = 1, figPath = 'a.png')
+```
+
+
+# سوال سوم
+
+اسامی شخصیت‌های هر کتاب
+در ابتدا بر اساس کتاب جدا میکنیم کلمات را
+پس از آن کلماتی که با حروف بزرگ شروع شده‌اند را جدا کرده و مانند کاری که در کلاس کردیم عمل میکنیم همچنین کلمات به خصوصی مانند آقا و خانم که با حروف بزرگ شروع میشوند و زیاد تکرار میشوند را حذف میکنیم.
+سپس نمودار اسامی پرتکرار را رسم میکنیم.
+
+```{r q3, message=FALSE, warning=FALSE}
+dickens_novels<-dickens_novels%>%
+   group_by(gutenberg_id)%>%
+   mutate(book=first(text))%>%ungroup()
+words <-
+  dickens_novels%>%
+  unnest_tokens(word, text, token='words',to_lower = FALSE)
+
+names<-words%>%
+  filter(str_detect(word,"[A-Z][a-z]+"))%>%
+  filter(!(str_to_lower(word) %in% words$word))%>%
+  filter(word!="Mr" & word!="Mrs")%>%
+  group_by(book,word)%>%
+  summarise(num=n())%>%
+  arrange(book,num)%>%
+  top_n(5)
+
+ggplot(names,aes(x = word,y = num, fill = book)) +
+  geom_col(stat = 'identity') +
+  facet_wrap(. ~ book,nrow = 3,scales = "free") +
+  geom_text(aes(label = word),hjust="left")+
+  coord_flip() +
+  scale_y_continuous(limits = c(0,max(names$num)*2))+
+  theme(legend.position = 'none',
+        axis.ticks.y = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+```
+
+# سوال چهارم
+در این سوال ابتدا از متادیتای گوتنبرگ کتاب بی‌نوایان را پیدا میکنیم و پس از دانلود آن بار معنایی کلمات را در دیتافریم نوشته و سپس نمودار آن را رسم میکنیم.
+
+
+```{r q4, message=FALSE, warning=FALSE}
+miserables <- gutenberg_download(c(48731,48732,48733,48734,48735))
+miserables_words <-
+  miserables%>%
+  unnest_tokens(word, text, token='words')
+miserables_words<-
+  miserables_words%>%
+  anti_join(stop_words,bu='word')%>%
+  select(word)
+
+all_words <-miserables_words$word
+positive <-get_sentiments("bing")
+emo_words <-
+  miserables_words %>%
+  dplyr::mutate(order = row_number()) %>%
+  inner_join(get_sentiments("bing")) %>%
+  mutate(index = floor(order%%200)) %>%
+  group_by(index ,sentiment) %>%
+  dplyr::count() %>%
+  tidyr::spread(sentiment, n, fill = 1) %>%
+  mutate(sentiment = positive - negative)
+
+ggplot(emo_words, aes(x=index)) +
+  geom_bar(stat = "identity",aes(y=sentiment,fill="sentiment"))
+
+```
+
+
+# سوال پنجم
+
+ابتدا کلماتی که بعد از هی و شی بکار برده‌شده‌اند را جدا میکنیم. این کلمات را بر اساس تعداد تکرار میتب میکنیم برای هرکدام از مرد و زن یک دیتافریم جدا ایجاد میکنیم که نهایتا به هم میچسبانیم این دو دیتافریم را.
+پس از چسباندن بر حسب اینکه متعلق به مردان یا زنان هستند و به ترتیب کاربرد مرتب میکنیم.
+
+```{r q5, echo=FALSE, message=FALSE, warning=FALSE}
+women_verbs <-
+  words%>%
+  filter(lag(word)=='she'|lag(word)=='She')
+words <-
+  dickens_novels%>%
+  unnest_tokens(word, text, token='words')
+women_verbs<-words%>%
+  filter(lag(word)=="she" |lag(word)=="She")%>%
+  group_by(word)%>%
+  count()%>%
+  arrange(-n)%>%
+  head(20)%>%
+  mutate(gender="woman")
+men_verbs<-words%>%
+  filter(lag(word)=="he" |lag(word)=="He")%>%
+  group_by(word)%>%
+  count()%>%
+  arrange(-n)%>%
+  head(20)%>%
+  mutate(gender="man")
+verbs = full_join(women_verbs,men_verbs)
+verbs <-
+  verbs%>%
+  ungroup%>%
+  group_by(gender)%>%
+  mutate(index = 1:n())
+ggplot(verbs, aes(x=index,y=n, fill=gender))+
+  geom_bar(stat='identity',position = position_dodge(
+    preserve = 'single'
+  ))+
+  theme_minimal()+
+  geom_label(aes(y= n+50,label = word))
+
+```
+
+# سوال ششم 
+
+در این سوال هدف این است که ابتدا فصل‌های کتاب را جدا کنیم و سپس برای فصل‌های یونیگرام و بایگرام 
+```{r q6, message=FALSE, warning=FALSE}
+library(tidyr)
+chapters<-dickens_novels%>%
+  unnest_lines(line,text)%>%
+  group_by(book)%>%
+  mutate(chapter = cumsum(str_detect(line, regex("^[IVX]+\\. |^[ivx]+\\. |^CHAPTER [IVX]+ |^CHAPTER [ONETWHRFUVSIXG]+|^chapter [ivx]+|^chapter \\d|^chapter [onetwhrfuvsixg]+"))))%>%
+  group_by(book,chapter)%>%
+  filter(n()>50)%>%
+  summarise(text = paste0(line, collapse = " "))
+
+unigrams<-chapters%>%
+  unnest_tokens(unigram, text, token = "ngrams", n = 1)%>%
+  group_by(book)%>%
+  count(unigram)%>%
+  separate(unigram, c("word1"), sep = " ")%>%
+  filter(!word1 %in% stop_words$word) 
+
+freq_rank_unigram<-unigrams%>%  
+  group_by(book)%>%
+  arrange(n)%>%
+  mutate(frequency=n/n(),rank=last(row_number())-row_number())%>%
+  arrange(book,rank)
+
+bigrams<-chapters%>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)%>%
+  group_by(book)%>%
+  count(bigram)%>%
+  separate(bigram, c("word1", "word2"), sep = " ")%>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word)
+  
+freq_rank_bigram<-bigrams%>%  
+  group_by(book)%>%
+  arrange(n)%>%
+  mutate(frequency=n/n(),rank=last(row_number())-row_number())%>%
+  arrange(book,rank)
+
+freqs<-
+  rbind(freq_rank_bigram%>%select(rank,frequency,book)%>%mutate(ngram="bigram"),
+        freq_rank_unigram%>%select(rank,frequency,book)%>%mutate(ngram="unigram"))
+
+freqs<-freqs%>%
+  mutate(book=str_trim(book))
+
+ggplot(freqs,aes(rank,frequency,color=ngram))+
+  geom_point()+
+  scale_x_log10()+
+  scale_y_log10()+
+  facet_wrap(~book,nrow = 5)+
+  theme(strip.text = element_text())
+unigrams_per_chapter<-chapters%>%
+  unnest_tokens(unigram, text, token = "ngrams", n = 1)%>%
+  group_by(book,chapter)%>%
+  count(unigram)%>%
+  separate(unigram, c("word"), sep = " ")%>%
+  filter(!word %in% stop_words$word)
+
+freq_rank_unigram_per_chapter<-unigrams_per_chapter%>%  
+  group_by(book,chapter)%>%
+  arrange(n)%>%
+  mutate(frequency=n/n(),rank=last(row_number())-row_number())%>%
+  arrange(book,chapter,rank)
+
+bigrams_per_chapter<-chapters%>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)%>%
+  group_by(book,chapter)%>%
+  count(bigram)%>%
+  separate(bigram, c("word1", "word2"), sep = " ")%>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word)
+  
+  
+freq_rank_bigram_per_chapter<-bigrams_per_chapter%>%  
+  group_by(book,chapter)%>%
+  arrange(n)%>%
+  mutate(frequency=n/n(),rank=last(row_number())-row_number())%>%
+  arrange(book,chapter,rank)
+
+freqs_by_chapter<-
+  rbind(freq_rank_bigram_per_chapter%>%select(rank,frequency,book,chapter)%>%mutate(ngram="bigram"),
+        freq_rank_unigram_per_chapter%>%select(rank,frequency,book,chapter)%>%mutate(ngram="unigram"))
+
+freqs_by_chapter<-freqs_by_chapter%>%
+  mutate(book=str_trim(book))
+ggplot(freqs_by_chapter,aes(rank,frequency,color=ngram))+
+  geom_point()+
+  scale_x_log10()+
+  scale_y_log10()+
+  facet_wrap(~book,nrow = 5)
+```
+
+
+# سوال هفتم
+
+در این سوال مانند سوال قبل عمل میکنیم در ابتدا داده‌ها را دانلود کرده و سپس مانند سوال قبل بایگرام و یونیگرام را رسم میکنیم بر حسب فصل.
+
+```{r q7, message=FALSE, warning=FALSE}
+
+austin_novels<-gutenberg_download(c(105,121,141,158,161,1342,21839,42671))
+austin<-austin_novels%>%
+  group_by(gutenberg_id)%>%
+  mutate(book=str_trim(first(text)))%>%ungroup()
+
+chapters<-austin%>%
+  unnest_lines(line,text)%>%
+  group_by(book)%>%
+  mutate(chapter = cumsum(str_detect(line, regex("^[IVX]+\\. |^[ivx]+\\. |^CHAPTER [IVX]+ |^CHAPTER [ONETWHRFUVSIXG]+|^chapter [ivx]+|^chapter \\d|^chapter [onetwhrfuvsixg]+"))))%>%
+  group_by(book,chapter)%>%
+  filter(n()>50)%>%
+  summarise(text = paste0(line, collapse = " "))
+
+unigrams_per_chapter<-chapters%>%
+  unnest_tokens(unigram, text, token = "ngrams", n = 1)%>%
+  group_by(book,chapter)%>%
+  count(unigram)%>%
+  separate(unigram, c("word"), sep = " ")%>%
+  filter(!word %in% stop_words$word)
+
+freq_rank_unigram_per_chapter<-unigrams_per_chapter%>%  
+  group_by(book,chapter)%>%
+  arrange(n)%>%
+  mutate(frequency=n/n(),rank=last(row_number())-row_number())%>%
+  arrange(book,chapter,rank)
+
+bigrams_per_chapter<-chapters%>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)%>%
+  group_by(book,chapter)%>%
+  count(bigram)%>%
+  separate(bigram, c("word1", "word2"), sep = " ")%>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word)
+
+
+freq_rank_bigram_per_chapter<-bigrams_per_chapter%>%  
+  group_by(book,chapter)%>%
+  arrange(n)%>%
+  mutate(frequency=n/n(),rank=last(row_number())-row_number())%>%
+  arrange(book,chapter,rank)
+
+freqs_by_chapter<-
+  rbind(freq_rank_bigram_per_chapter%>%select(rank,frequency,book,chapter)%>%mutate(ngram="bigram"),
+        freq_rank_unigram_per_chapter%>%select(rank,frequency,book,chapter)%>%mutate(ngram="unigram"))
+
+freqs_by_chapter<-freqs_by_chapter%>%
+  mutate(book=str_trim(book))
+ggplot(freqs_by_chapter,aes(rank,frequency,color=ngram))+
+  geom_point()+
+  scale_x_log10()+
+  scale_y_log10()+
+  facet_wrap(~book,nrow=5)
+```
+
+# سوالات بخش زلزله
+
+# سوال اول 
+
+در این سوال در ابتدا زلزله‌های بیش از ۶.۵ ریشتر را جدا میکنیم سپس تا حداکثر ۵زلزله قبل از ان که در همان روز بوده را هم جدا میکنیم و نهایتا همه‌ی آن‌ها را در کنار هم رسم میکنیم. مشاهده می‌شود که زلزله‌های بزرگ همگی پیش‌لرزه‌های کوچک‌تری داشته‌اند پیش از وقوع.
+```{r q1_eq, message=FALSE, warning=FALSE}
+iran_eq = read.csv('iran.csv')
+View(iran_eq)
+sangin <-
+  which(iran_eq$mag>6.5)
+rows = c()
+for (i in 1:length(sangin)){
+  a=0
+  eq_day = day(iran_eq[sangin[i],]$time)
+  while(eq_day == day(iran_eq[sangin[i]-a,]$time) & a<5){
+    a = a+1
+  }
+  rows = append(rows,(sangin[i]-a):sangin[i])
+}
+View(rows)
+sangin_eq <- 
+  iran_eq[rows,]%>%
+  select(time,mag)%>%
+  mutate(index = 1:n(),month_Yr = format(as.Date(time), "%Y-%m-%d"), type = case_when(mag>6.5~'main eq', TRUE~'pre_eq'))
+ggplot(sangin_eq,aes(x=-index,y=mag, fill=type))+
+  geom_bar(stat='identity')+coord_flip()+
+  geom_label(data = subset(sangin_eq,type=='main eq'), aes(label=month_Yr)
+             ,position = position_dodge(width=0.9),  size=3)
+
+```
+
+
+# سوال سوم
+
+در این سوال نحوه تقسیم‌بندی فصل‌ها در تاریخ میلادی و جدا کردن آن‌ها چالش اصلی بود که پس از ایجاد شرط‌های متعدد نهایتا فصل‌ها را جدا میکنیم و طبق فصل تعداد زلزله‌ها را رسم میکنم.
+میتوانستیم میانگین قدرت یا مجموع قدرت را هم رسم کنیم ولی در سوال صرفا تعداد را خواسته‌بود اما موارد دیگر مانند میانگین قدرت و ... هم تقریبا برابر هستند مانند تعداد.
+```{r q3_eq, message=FALSE, warning=FALSE}
+iran_eq$date = as.Date(iran_eq$time)
+iran_eq <-
+  iran_eq%>%
+  mutate(month = month(date),day = day(date))
+iran_eq<-
+  iran_eq%>%
+  mutate(season = case_when((month(date)<3| (month(date)==3&day(date)<=15)
+                            |(month(date)==12&day(date)>15) ~'winter'),
+         month(date)<6 |(month==6&day<=15)~ 'spring',
+         month(date)<9| (month==9&day<=15)~'summer',TRUE~'fall'))
+View(iran_eq)
+ggplot(iran_eq,aes(x=season))+
+  geom_bar()
+```
